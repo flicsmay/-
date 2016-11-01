@@ -12,6 +12,7 @@ def file_arrangement(abs_dir_path):
     suffix_type = []
     sep = os.path.sep
     suffix_format = re.compile('(.*)\.(.*)') # name in group(1) and suffix in group(2)
+    # using to split extension also can use os.path.splitext(path)
     for root, dirs, files in os.walk(abs_dir_path):
         dir_name = os.path.basename(root) # current directory name
         for file_name in files:
@@ -42,3 +43,4 @@ eg. \'C:\\a_dir\' or \'.\\another_dir\'
         file_arrangement(path)
     else:
         file_arrangement(os.path.abspath(path))
+    print('Done')
