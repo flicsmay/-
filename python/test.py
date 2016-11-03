@@ -1,13 +1,12 @@
 # -*- coding:utf-8 -*-
-# a script to get top 250 movies of douban.com
 
 import requests
 from bs4 import BeautifulSoup
-import shelve
 import re
 import time
 import json
 from PIL import Image
+import configparser
 
 DOWNLOAD_URL = 'https://www.zhihu.com/#signin'
 
@@ -37,15 +36,20 @@ def download_page(url):
 
 
 def save_cookies(session):
-    shelve_file = shelve.open('cookie.ini')
-    shelve_file['cookies'] = session
-    shelve_file.close()
+    config = configparser.ConfigParser()
+    config['COOKIES'] = session.cookies.get_dict()
+    with open('cookie.ini', 'w') as config_file:
+        config.write(config_file)
 
 
 def load_cookies(session):
-    shelve_file = shelve.open('cookie.ini')
-    session = shelve_file['cookies']
-    shelve_file.close()
+    config = configparser.ConfigParser()
+    config.read('cookie.ini')
+    for key in config['COOKIES']:
+        try:
+            session.cookies.set(key, config['COOKIES'][key])
+        except:
+            continue
 
 
 def get_xsrf(html):
@@ -118,13 +122,22 @@ def login_in(account, password, session):
 
 def main():
     session = requests.session()
+    people = 'https://www.zhihu.com/people/minmin.gong/activities'
     load_cookies(session)
     if is_login(session):
         print('login in successful')
-    account = input('please input your account')
-    pwd = input('please input your password')
-    login_in(account, pwd, session)
-    print(is_login(session))
+    else:
+        print('fail to login')
+        account = input('please input your account')
+        pwd = input('please input your password')
+        login_in(account, pwd, session)
+    session.get('https://www.zhihu.com', headers=HEADER)
+    session.get('https://www.zhihu.com/people/minmin.gong', headers=HEADER)
+    data = 'start=1478112898'
+    html_content = session.post(people, data, headers=HEADER)
+    with open('save.txt', 'wb') as fp:
+        fp.write(html_content.content)
+
 
 if __name__ == '__main__':
     main()
