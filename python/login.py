@@ -10,7 +10,12 @@ import time
 import codecs
 from pymongo import MongoClient
 
-PEOPLE = 'excited-vczh'
+PEOPLE = 'li-feng-xie'
+CATCH_FORM_MID = False
+RESUME_TIME = '0'
+SAVE_FILE_CATCH = 'lee.txt'
+SLEEP_TIME = 1
+
 
 ACCEPT = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
 ACCEPT_ENCODING = 'gzip, deflate, sdch'
@@ -29,6 +34,8 @@ HEADER = {
 }
 
 MONGO_CONN = MongoClient('localhost', 27017)
+DATA_BASE = MONGO_CONN['time_line_DB']
+DAYS_COLLECTION = DATA_BASE['days_collection']
 
 
 def download_page(url):
@@ -49,7 +56,7 @@ def make_single_dict(tag_list):
     return tag_to_1_dict
 
 
-def add_two_dict(x, y):
+def add_y_dict_to_x_dict(x, y):
     for k, v in y.items():
         if k in x.keys():
             x[k] += v
@@ -67,6 +74,10 @@ def get_tag_from_question(question_url, header):
 
 
 def assemble_by_day(file_name, header):
+    skip_request = ('follow_column', 'follow_favlist', 'voteup_article'
+                    'join_live', 'collect_answer', 'follow_topic')
+
+    posts = {'_id': 'first'}
     current_day = 0
     counter = 0
     with codecs.open(file_name, 'rb', encoding='utf-8') as fp:
@@ -74,18 +85,37 @@ def assemble_by_day(file_name, header):
             data_list = each_line.split('|')
             activity = data_list[1][7:]
             date = time.localtime(int(data_list[0]))
-
+            formal_time = str(date.tm_year) + '/' + str(date.tm_mon) + '/' + str(date.tm_mday)
             if date.tm_yday != current_day:
-                # todo: save pre day data to database
+                if current_day != 0:
+                    posts['counter'] = counter
+                    DAYS_COLLECTION.insert(posts)
                 current_day = date.tm_yday
                 counter = 0
+                posts = {
+                    '_id': formal_time,
+                    'answers': {},
+                    'follow': {},
+                    'agrees': {},
+                    'counter': 0
+                }
             counter += 1
-            if activity == 'follow_column' or activity == 'follow_favlist' or activity == 'voteup_article'\
-                or activity == 'join_live' or activity == 'collect_answer':
+            if activity in skip_request:
                 continue
-            question_url = data_list[2][:18]
+            question_url = BASE_URL + data_list[2][:18]
             tag_list = get_tag_from_question(question_url, header)
             tag_dict = make_single_dict(tag_list)
+            if activity == 'answer_question':
+                add_in_type = 'answers'
+            elif activity == 'voteup_answer':
+                add_in_type = 'agrees'
+            elif activity == 'follow_question':
+                add_in_type = 'follow'
+            else:
+                raise TypeError # 随意raise了一个
+            add_y_dict_to_x_dict(posts[add_in_type], tag_dict)
+
+
 
 
 def save_cookies(session):
@@ -186,6 +216,10 @@ def download_page(url, header):
 
 def get_time_line(session, people_url, header, mid_starting, start_num):
 
+    if mid_starting:
+        mode = 'a'
+    else:
+        mode = 'wb'
     post_url = people_url + '/' + 'activities'
     json_request_header = header
     json_request_header['X-Xsrftoken'] = session.cookies['_xsrf']
@@ -194,7 +228,7 @@ def get_time_line(session, people_url, header, mid_starting, start_num):
     def has_no_class(tag):
         return not tag.has_attr('class')
 
-    with codecs.open('vczh.txt', 'a', encoding='utf-8') as fp:
+    with codecs.open(SAVE_FILE_CATCH, mode, encoding='utf-8') as fp:
 
         if not mid_starting:
             latest_time = get_latest_activity_time(people_url, header)
@@ -232,7 +266,7 @@ def get_time_line(session, people_url, header, mid_starting, start_num):
             post_data = 'start=' + date_time
             post_return = session.post(post_url, post_data, headers=json_request_header)
             json_return = json.loads(post_return.content.decode('utf-8'))
-            time.sleep(2)
+            time.sleep(SLEEP_TIME)
 
 
 def get_latest_activity_time(people_url, header):
@@ -255,9 +289,6 @@ def url_text(header, session, url, post_text):
 
 
 def main():
-    db = MONGO_CONN['zhihu_database']
-    collection = db['zhihu_collection']
-    exit()
     session = requests.session()
     load_cookies(session)
     if is_login(session):
@@ -267,9 +298,9 @@ def main():
         account = input('please input your account')
         pwd = input('please input your password')
         login_in(account, pwd, session)
-
+    assemble_by_day(SAVE_FILE_CATCH, HEADER)
     # url_text(HEADER, session, PEOPLE_URL, '1476599999')
-    get_time_line(session, PEOPLE_URL, HEADER, True, '1476599999')
+    # get_time_line(session, PEOPLE_URL, HEADER, CATCH_FORM_MID, RESUME_TIME)
 
 
 if __name__ == '__main__':
